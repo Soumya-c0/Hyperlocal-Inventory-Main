@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  postgres-db:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: hyperlocal_postgres
+    environment:
+      POSTGRES_DB: hyperlocal_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - hyperlocal_network
+
+  redis-stream:
+    image: redis:7-alpine
+    container_name: hyperlocal_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - hyperlocal_network
+
+  ml-service:
+    build: ./backend-ml
+    container_name: hyperlocal_ml_api
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres-db
+      - redis-stream
+    networks:
+      - hyperlocal_network
+
+  # NEW: Java Spring Boot Core Backend
+  core-service:
+    build: ./backend-core
+    container_name: hyperlocal_core_api
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres-db
+    networks:
+      - hyperlocal_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  hyperlocal_network:
+    driver: bridge
