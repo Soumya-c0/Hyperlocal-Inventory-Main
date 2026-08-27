@@ -18,4 +18,10 @@ public class OrderController {
     public ActiveOrder createNewOrder(@PathVariable Long skuId) {
         return orderService.createOrder(skuId);
     }
+    @PostMapping("/{orderId}/dispatch")
+    public com.example.demo.models.CarbonLedger dispatchOrder(
+            @PathVariable Long orderId, 
+            @RequestParam double gradient) {
+        return orderService.dispatchOrderAndLogCarbon(orderId, gradient);
+    }
 }
