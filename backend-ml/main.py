@@ -22,35 +22,28 @@ def load_trained_model():
 class TelemetryPayload(BaseModel):
     vehicle_weight_kg: float
     road_gradient_deg: float
+    distance_km: float
 
 @app.post("/predict-emissions")
 def predict_route_emissions(payload: TelemetryPayload):
-    """
-    Consumes physical telematics, executes decision tree regression, 
-    returns projected carbon output.
-    """
     try:
-        # Reconstruct the exact feature dataframe used during training
         features = pd.DataFrame([{
             'vehicle_weight_kg': payload.vehicle_weight_kg,
-            'road_gradient_deg': payload.road_gradient_deg
+            'road_gradient_deg': payload.road_gradient_deg,
+            'distance_km': payload.distance_km
         }])
-        
-        # Execute model inference
         prediction = model.predict(features)
-        
-        # Extract scalar value from NumPy array
         projected_co2 = float(prediction[0])
-        
+
         return {
             "status": "success",
             "telemetry_processed": {
                 "weight_kg": payload.vehicle_weight_kg,
-                "gradient_deg": payload.road_gradient_deg
+                "gradient_deg": payload.road_gradient_deg,
+                "distance_km": payload.distance_km
             },
             "projected_co2_g": projected_co2
         }
-        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Inference failed: {str(e)}")
 

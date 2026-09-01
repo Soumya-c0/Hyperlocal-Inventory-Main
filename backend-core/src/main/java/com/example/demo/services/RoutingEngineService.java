@@ -86,7 +86,7 @@ public class RoutingEngineService {
                     liveGradientDeg = 2.0;
                 }
 
-                double projectedCo2 = fetchCo2Prediction(currentWeightKg, liveGradientDeg);
+                double projectedCo2 = fetchCo2Prediction(currentWeightKg, liveGradientDeg, distanceKm);
 
                 Map<String, Object> routeData = new HashMap<>();
                 routeData.put("routeId", idPrefix + "-" + i);
@@ -167,16 +167,17 @@ public class RoutingEngineService {
         return Math.toDegrees(Math.atan(gradeRatio));
     }
 
-    private double fetchCo2Prediction(double weight, double gradient) {
-        Map<String, Double> payload = new HashMap<>();
-        payload.put("vehicle_weight_kg", weight);
-        payload.put("road_gradient_deg", gradient);
+    private double fetchCo2Prediction(double weight, double gradient, double distanceKm) {
+    Map<String, Double> payload = new HashMap<>();
+    payload.put("vehicle_weight_kg", weight);
+    payload.put("road_gradient_deg", gradient);
+    payload.put("distance_km", distanceKm);
 
-        ResponseEntity<Map> response = restTemplate.postForEntity(ML_API_URL, payload, Map.class);
+    ResponseEntity<Map> response = restTemplate.postForEntity(ML_API_URL, payload, Map.class);
 
-        if (response.getBody() != null && response.getBody().containsKey("projected_co2_g")) {
-            return ((Number) response.getBody().get("projected_co2_g")).doubleValue();
-        }
-        return 0.0;
+    if (response.getBody() != null && response.getBody().containsKey("projected_co2_g")) {
+        return ((Number) response.getBody().get("projected_co2_g")).doubleValue();
     }
+    return 0.0;
+}
 }
