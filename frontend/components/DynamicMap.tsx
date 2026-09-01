@@ -3,8 +3,8 @@
 import { MapContainer, TileLayer, Marker, Popup, Polygon } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { useDashboardStore } from '../store/dashboardStore';
 
-// Fix for default marker icons failing to load in Next.js
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
     iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -13,34 +13,39 @@ L.Icon.Default.mergeOptions({
 });
 
 export default function DynamicMap() {
-    // Hyderabad bounding box center based on our OpenStreetMap ingestion
-    const centerPosition: [number, number] = [17.44, 78.38];
+    const courierLocations = useDashboardStore((state) => state.courierLocations);
     
-    // Static polygon representing the Downtown Hub territory
-    const warehouseTerritory: [number, number][] = [
-        [17.442, 78.382],
-        [17.442, 78.378],
-        [17.438, 78.378],
-        [17.438, 78.382]
+    const centerPosition: [number, number] = [17.442, 78.368]; // Centered between both hubs
+
+    // 1. Main Warehouse Boundary (Gachibowli)
+    const mainWarehouseTerritory: [number, number][] = [
+        [17.447, 78.357], [17.447, 78.353], [17.443, 78.353], [17.443, 78.357]
+    ];
+
+    // 2. Local Warehouse Boundary (Mindspace)
+    const localWarehouseTerritory: [number, number][] = [
+        [17.442, 78.382], [17.442, 78.378], [17.438, 78.378], [17.438, 78.382]
     ];
 
     return (
-        <MapContainer center={centerPosition} zoom={15} style={{ height: '100%', width: '100%' }}>
-            <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
+        <MapContainer center={centerPosition} zoom={14} style={{ height: '100%', width: '100%', zIndex: 0 }}>
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             
-            <Polygon positions={warehouseTerritory} pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.2 }}>
-                <Popup>
-                    <strong>Downtown Hub</strong><br/>
-                    Capacity: 5000 units
-                </Popup>
+            {/* Render Main Warehouse (Orange) */}
+            <Polygon positions={mainWarehouseTerritory} pathOptions={{ color: '#f97316', fillColor: '#f97316', fillOpacity: 0.3 }}>
+                <Popup><strong>Main Warehouse</strong><br/>Gachibowli Hub</Popup>
             </Polygon>
 
-            <Marker position={[17.44, 78.38]}>
-                <Popup>Courier C-492<br/>Status: DISPATCHED</Popup>
-            </Marker>
+            {/* Render Local Warehouse (Blue) */}
+            <Polygon positions={localWarehouseTerritory} pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.3 }}>
+                <Popup><strong>Local Warehouse</strong><br/>Mindspace Downtown</Popup>
+            </Polygon>
+
+            {Object.values(courierLocations).map((courier) => (
+                <Marker key={courier.courierId} position={[courier.lat, courier.lon]}>
+                    <Popup>Courier: {courier.courierId}</Popup>
+                </Marker>
+            ))}
         </MapContainer>
     );
 }

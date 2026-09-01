@@ -1,92 +1,127 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useDashboardStore } from '../../store/dashboardStore';
+import dynamic from 'next/dynamic';
 
-export default function CourierView() {
-    const activeCourier = useDashboardStore((state) => state.activeCourier);
-    const deductCourierPayload = useDashboardStore((state) => state.deductCourierPayload);
-    
-    const [slaMinutes, setSlaMinutes] = useState(42);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [deliveryStatus, setDeliveryStatus] = useState("EN_ROUTE");
+// Dynamically load the Courier Map to prevent SSR Leaflet errors
+const CourierMap = dynamic(() => import('../../components/CourierMap'), { ssr: false });
 
-    // Decrement the SLA timer every minute
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setSlaMinutes((prev) => (prev > 0 ? prev - 1 : 0));
-        }, 60000);
-        return () => clearInterval(timer);
-    }, []);
+export default function CourierDashboard() {
+    const [routes, setRoutes] = useState<any[]>([]);
+    const [selectedRoute, setSelectedRoute] = useState<any | null>(null);
+    const [slaTimer, setSlaTimer] = useState<number>(0);
+    const [deliveryStatus, setDeliveryStatus] = useState<'PENDING' | 'EN_ROUTE' | 'DELIVERED'>('PENDING');
+    const [emissionsSaved, setEmissionsSaved] = useState<number | null>(null);
 
-    const handleDropOff = async () => {
-        if (!activeCourier.assignedOrderId) return;
-        
-        setIsProcessing(true);
-        // PASTE YOUR CODESPACE URL HERE
-        const BACKEND_URL = "https://reimagined-potato-4jwx74w9p7gxhjxvg-8080.app.github.dev";
-        const routeGradient = 8.5; 
-
-        try {
-            const response = await fetch(`${BACKEND_URL}/api/orders/${activeCourier.assignedOrderId}/dispatch?gradient=${routeGradient}`, {
-                method: 'POST'
-            });
-            
-            if (response.ok) {
-                // Deduct weight from local UI state
-                deductCourierPayload(6.5); 
-                setDeliveryStatus("DELIVERED");
-            }
-        } catch (error) {
-            console.error("Failed to process drop-off:", error);
-        } finally {
-            setIsProcessing(false);
-        }
+    // Hardcoded dispatch parameters to feed the routing engine
+    const dispatchParams = {
+        weight: 6050, // 6000kg van + 50kg server rack
+        startLat: 17.445, startLon: 78.355, // Main Warehouse (Gachibowli)
+        endLat: 17.440, endLon: 78.380      // Local Warehouse (Mindspace)
     };
 
+    // Fetch live routes from Java Spring Boot on load
+    useEffect(() => {
+        const fetchRoutes = async () => {
+            try {
+                const url = `http://localhost:8080/api/routing/options?weight=${dispatchParams.weight}&startLat=${dispatchParams.startLat}&startLon=${dispatchParams.startLon}&endLat=${dispatchParams.endLat}&endLon=${dispatchParams.endLon}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                setRoutes(data);
+            } catch (error) {
+                console.error("Failed to fetch routes from Java backend:", error);
+            }
+        };
+        fetchRoutes();
+    }, []);
+
+    // SLA Timer Logic
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (deliveryStatus === 'EN_ROUTE' && slaTimer > 0) {
+            interval = setInterval(() => setSlaTimer((prev) => prev - 1), 1000);
+        }
+        return () => clearInterval(interval);
+    }, [deliveryStatus, slaTimer]);
+
+    const handleRouteSelection = (route: any) => {
+        setSelectedRoute(route);
+        setSlaTimer(route.estimatedTimeMins * 60);
+        setDeliveryStatus('EN_ROUTE');
+    };
+
+    const handleConfirmDropoff = () => {
+        setDeliveryStatus('DELIVERED');
+        // Subtract greenest route CO2 from standard route CO2 to show savings
+        const standardRoute = routes.find(r => !r.isGreenest) || routes[0];
+        const savings = Math.max(0, standardRoute.projectedCo2 - selectedRoute.projectedCo2);
+        setEmissionsSaved(savings);
+    };
+
+    const formatTime = (sec: number) => `${Math.floor(sec / 60).toString().padStart(2, '0')}:${(sec % 60).toString().padStart(2, '0')}`;
+
     return (
-        <div className="min-h-screen bg-slate-900 text-white p-4">
-            <div className="max-w-md mx-auto h-full flex flex-col gap-6 pt-8">
-                
-                {/* Header Information */}
-                <div className="flex justify-between items-center border-b border-slate-700 pb-4">
-                    <div>
-                        <p className="text-slate-400 text-sm">Active Courier</p>
-                        <h1 className="text-2xl font-bold">{activeCourier.courierId}</h1>
-                    </div>
-                    <div className="text-right">
-                        <p className="text-slate-400 text-sm">Payload Weight</p>
-                        <p className="text-2xl font-bold text-blue-400">{activeCourier.currentWeightKg.toFixed(1)} kg</p>
-                    </div>
+        <div className="min-h-screen bg-slate-100 p-4 flex flex-col md:flex-row gap-6">
+            
+            {/* Left Side: Map UI visualizing the GeoJSON */}
+            <div className="w-full md:w-2/3 h-[50vh] md:h-[90vh] bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative">
+                <CourierMap 
+                    start={[dispatchParams.startLat, dispatchParams.startLon]}
+                    end={[dispatchParams.endLat, dispatchParams.endLon]}
+                    routeGeometry={selectedRoute?.geometry || null}
+                />
+            </div>
+
+            {/* Right Side: Interaction Panel */}
+            <div className="w-full md:w-1/3 flex flex-col gap-4">
+                <div className="bg-slate-900 text-white p-5 rounded-xl text-center">
+                    <h1 className="text-xl font-bold">Active Assignment</h1>
+                    <p className="text-sm text-slate-300">Gachibowli ➔ Mindspace</p>
+                    <p className="text-xs text-slate-400 mt-1">Payload: 50.0 kg</p>
                 </div>
 
-                {/* SLA Timer */}
-                <div className="bg-slate-800 rounded-2xl p-6 text-center shadow-lg border border-slate-700">
-                    <p className="text-slate-400 mb-2 font-medium">Delivery SLA Remaining</p>
-                    <div className={`text-6xl font-black ${slaMinutes < 15 ? 'text-red-500' : 'text-emerald-400'}`}>
-                        {slaMinutes}<span className="text-2xl font-medium text-slate-500 ml-2">min</span>
+                {deliveryStatus === 'PENDING' && (
+                    <div className="flex flex-col gap-3">
+                        <h2 className="font-semibold text-slate-700">Select OSRM Route</h2>
+                        {routes.length === 0 ? <p className="text-sm text-slate-500">Loading live ML routes...</p> : null}
+                        
+                        {routes.map((route) => (
+                            <div key={route.routeId} onClick={() => handleRouteSelection(route)}
+                                className={`border-2 rounded-xl p-4 cursor-pointer ${route.isGreenest ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                                <div className="flex justify-between items-start mb-1">
+                                    <h3 className="font-bold text-slate-800">{route.description}</h3>
+                                    {route.isGreenest && <span className="bg-emerald-500 text-white text-[10px] px-2 py-1 rounded-full font-bold">ECO</span>}
+                                </div>
+                                <div className="flex justify-between text-sm text-slate-600 mt-2">
+                                    <span>{route.distanceKm} km • {route.estimatedTimeMins} min</span>
+                                    <span className={route.isGreenest ? 'text-emerald-700 font-bold' : ''}>{route.projectedCo2}g CO2</span>
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                </div>
+                )}
 
-                {/* Drop-Off Trigger Action */}
-                <div className="mt-auto pb-8">
-                    {deliveryStatus === "EN_ROUTE" ? (
-                        <button 
-                            onClick={handleDropOff}
-                            disabled={isProcessing}
-                            className={`w-full py-5 rounded-xl text-xl font-bold uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(59,130,246,0.3)]
-                                ${isProcessing 
-                                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed' 
-                                    : 'bg-blue-600 hover:bg-blue-500 text-white active:scale-95'}`}
-                        >
-                            {isProcessing ? 'Processing Ledger...' : 'Confirm Drop-Off'}
-                        </button>
-                    ) : (
-                        <div className="w-full py-5 rounded-xl bg-emerald-900/50 border border-emerald-500/50 text-emerald-400 text-center text-xl font-bold uppercase tracking-wider">
-                            Delivery Completed
+                {deliveryStatus === 'EN_ROUTE' && (
+                    <div className="bg-white p-8 rounded-xl border border-slate-200 text-center">
+                        <h2 className="text-slate-500 font-medium">SLA Countdown</h2>
+                        <div className={`text-5xl font-black tabular-nums my-4 ${slaTimer < 300 ? 'text-red-500' : 'text-slate-800'}`}>
+                            {formatTime(slaTimer)}
                         </div>
-                    )}
-                </div>
+                        <button onClick={handleConfirmDropoff} className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg text-lg">
+                            Confirm Drop-Off
+                        </button>
+                    </div>
+                )}
+
+                {deliveryStatus === 'DELIVERED' && (
+                    <div className="bg-emerald-50 p-6 rounded-xl border border-emerald-100 text-center">
+                        <h2 className="text-2xl font-bold text-emerald-800 mb-2">Delivery Complete</h2>
+                        <div className="bg-white rounded-xl p-4 mt-4 shadow-sm">
+                            <h3 className="text-sm font-semibold text-slate-600 mb-1">XGBoost ML Savings</h3>
+                            <div className="text-3xl font-black text-emerald-600">{emissionsSaved?.toFixed(1)}g CO2e</div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
