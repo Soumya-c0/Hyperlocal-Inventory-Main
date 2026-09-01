@@ -12,6 +12,7 @@ L.Icon.Default.mergeOptions({
 });
 
 export default function CourierMap({ start, end, routeGeometry }: { start: [number, number], end: [number, number], routeGeometry: any }) {
+    console.log("routeGeometry received:", routeGeometry);
     const center: [number, number] = [
         (start[0] + end[0]) / 2,
         (start[1] + end[1]) / 2

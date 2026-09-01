@@ -24,7 +24,8 @@ export default function CourierDashboard() {
     useEffect(() => {
         const fetchRoutes = async () => {
             try {
-                const url = `http://localhost:8080/api/routing/options?weight=${dispatchParams.weight}&startLat=${dispatchParams.startLat}&startLon=${dispatchParams.startLon}&endLat=${dispatchParams.endLat}&endLon=${dispatchParams.endLon}`;
+                const API_BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
+                const url = `${API_BASE}/api/routing/options?weight=${dispatchParams.weight}&startLat=${dispatchParams.startLat}&startLon=${dispatchParams.startLon}&endLat=${dispatchParams.endLat}&endLon=${dispatchParams.endLon}`;
                 const res = await fetch(url);
                 const data = await res.json();
                 setRoutes(data);
@@ -51,11 +52,10 @@ export default function CourierDashboard() {
     };
 
     const handleConfirmDropoff = () => {
-        setDeliveryStatus('DELIVERED');
-        // Subtract greenest route CO2 from standard route CO2 to show savings
-        const standardRoute = routes.find(r => !r.isGreenest) || routes[0];
-        const savings = Math.max(0, standardRoute.projectedCo2 - selectedRoute.projectedCo2);
-        setEmissionsSaved(savings);
+    setDeliveryStatus('DELIVERED');
+    const standardRoute = routes.reduce((worst, r) => (r.projectedCo2 > worst.projectedCo2 ? r : worst), routes[0]);
+    const savings = Math.max(0, standardRoute.projectedCo2 - selectedRoute.projectedCo2);
+    setEmissionsSaved(savings);
     };
 
     const formatTime = (sec: number) => `${Math.floor(sec / 60).toString().padStart(2, '0')}:${(sec % 60).toString().padStart(2, '0')}`;
