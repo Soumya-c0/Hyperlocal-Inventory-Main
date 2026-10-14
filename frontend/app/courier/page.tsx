@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import { useSearchParams } from 'next/navigation';
 
 // Dynamically load the Courier Map to prevent SSR Leaflet errors
 const CourierMap = dynamic(() => import('../../components/CourierMap'), { ssr: false });
